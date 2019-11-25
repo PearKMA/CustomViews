@@ -43,7 +43,7 @@ class BarCodeSeekbar : View {
     private var space = 0F
     private val padding = 5
     private var mIndicatorPaint = Paint(Paint.ANTI_ALIAS_FLAG)
-    private val defaultColor = Color.parseColor("#626260")
+    private val zeroLineColor = Color.parseColor("#626260")
     private var mBigIndicatorPaint = Paint(Paint.ANTI_ALIAS_FLAG)
     private var mSmallIndicatorPaint = Paint(Paint.ANTI_ALIAS_FLAG)
     private var mMaxCount: Int = 100
@@ -53,31 +53,32 @@ class BarCodeSeekbar : View {
     private var mTickRightValue = 50
     private var tickPosition = 0
     private var isTouched = false
+    private var isDrawing = false
     fun testNext() {
-        if (mTickLeftValue > 100) {
+        if (mTickLeftValue >= 100) {
             mTickLeftValue = 0
             mTickRightValue = 50
         }
-        if (tickPosition > 100)
+        if (tickPosition > 99) {
             tickPosition = 0
-
-        ++tickPosition
-        ++mTickLeftValue
-        ++mTickRightValue
-        Log.d("BarCodeSeekbar", "testNext: $tickPosition")
+        }
+        tickPosition += 1
+        mTickLeftValue += 1
+        mTickRightValue += 1
         invalidate()
     }
 
     fun testSub() {
-        if (mTickLeftValue < 0) {
+        if (mTickLeftValue <= 0) {
             mTickLeftValue = 50
             mTickRightValue = 100
         }
-        if (tickPosition <= 0)
+        if (tickPosition <= 0) {
             tickPosition = 100
-        --tickPosition
-        --mTickLeftValue
-        --mTickRightValue
+        }
+        tickPosition -= 1
+        mTickLeftValue -= 1
+        mTickRightValue -= 1
         Log.d("BarCodeSeekbar", "testSub: $tickPosition")
         invalidate()
     }
@@ -141,8 +142,15 @@ class BarCodeSeekbar : View {
         invalidate()
     }
 
+    public fun getTickLeft(): Int {
+        return mTickLeftValue
+    }
+
+    public fun getTickRight() = mTickRightValue
+
     override fun onDraw(canvas: Canvas?) {
         super.onDraw(canvas)
+        isDrawing = true
         //draw center indicator
         val centerX = mWidth / 2
         val space6dp = mHeight * (DimensionUtils.dpToPixels(context, 6) / mHeight)
@@ -153,15 +161,32 @@ class BarCodeSeekbar : View {
             mHeight - space6dp,
             mIndicatorPaint
         )
+        //
         val space14dp = mHeight * (DimensionUtils.dpToPixels(context, 14) / mHeight)
-        val center = mTickRightValue - mTickLeftValue
+        val centerValue = (mTickRightValue - mTickLeftValue) / 2
+        //
         for (i in mTickLeftValue..mTickRightValue) {
 
-            if (tickPosition in 0..25 && i == ((mTickRightValue - mTickLeftValue) / 2 + tickPosition)) {
-                mBigIndicatorPaint.color = defaultColor
-            } else if (tickPosition in 75..100 && i == (tickPosition - 75 + mTickLeftValue)) {
-                mBigIndicatorPaint.color = defaultColor
+            when (tickPosition) {
+                in 0..25 -> {
+                    if (i == mTickRightValue - centerValue - tickPosition) {
+                        mBigIndicatorPaint.color = zeroLineColor
+                    } else {
+                        mBigIndicatorPaint.color = Color.WHITE
+                    }
+                }
+                in 75..99 -> {
+                    if (i == mTickLeftValue + centerValue + tickPosition) {
+                        mBigIndicatorPaint.color = zeroLineColor
+                    } else {
+                        mBigIndicatorPaint.color = Color.WHITE
+                    }
+                }
+                else -> {
+                    mBigIndicatorPaint.color = Color.WHITE
+                }
             }
+
 
             when {
                 i in (15 + mTickLeftValue)..(mTickLeftValue + 35) -> {
@@ -187,9 +212,9 @@ class BarCodeSeekbar : View {
                     else -> mSmallIndicatorPaint
                 }
             )
-            mBigIndicatorPaint.color = Color.WHITE
-        }
 
+        }
+        isDrawing = false
     }
 
 
@@ -231,14 +256,16 @@ class BarCodeSeekbar : View {
             distanceY: Float
         ): Boolean {
             if (isTouched) {
-                if (e1!!.x - e2!!.x > SWIPE_MIN_DISTANCE) {
-                    testSub()
-                    Log.d("GestureSeekbar", "onScroll: right to left")
-                } else if (e2.x - e1.x > SWIPE_MIN_DISTANCE) {
+
+                if (e1!!.x - e2!!.x > SWIPE_MIN_DISTANCE && !isDrawing) {
                     testNext()
+                    Log.d("GestureSeekbar", "onScroll: right to left")
+                } else if (e2.x - e1.x > SWIPE_MIN_DISTANCE && !isDrawing) {
+                    testSub()
                     Log.d("GestureSeekbar", "onScroll: left to right")
                 }
             }
+            mListener?.onScroll(this@BarCodeSeekbar, tickPosition, isTouched)
             return false
         }
 
@@ -254,7 +281,8 @@ class BarCodeSeekbar : View {
             } else if (e2.x - e1.x > SWIPE_MIN_DISTANCE && abs(velocityX) > SWIPE_THRESHOLD_VELOCITY) {
                 Log.d("GestureSeekbar", "onFling: left to right")
             }
-
+            //fling time then return
+            mListener?.onFling(this@BarCodeSeekbar, tickPosition)
 
             return true
         }
